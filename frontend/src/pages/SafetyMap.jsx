@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import 'leaflet/dist/leaflet.css'
 import { DATASET_SUMMARY, DELHI_LOCALITIES } from '../data/localitySafety'
 import { api, auth } from '../services/api'
+import { downloadRouteSummary } from '../services/mapDownload'
 
 const ROUTES = [
   { id: 'green', name: 'Green Path', label: 'Safest', distance: '19.1 km', time: '45 min', risk: 'Low risk', score: '92/100', color: '#5d9c75' },
@@ -73,30 +74,15 @@ function SafetyMap() {
       await api('/saved-routes', { method: 'POST', body: JSON.stringify(route) })
     } catch (requestError) { setSavedMessage(requestError.message); return }
     if (download) {
-      const blob = new Blob([JSON.stringify(route, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${selectedRoute.name.toLowerCase().replaceAll(' ', '-')}-details.json`
-      link.click()
-      URL.revokeObjectURL(url)
+      downloadRouteSummary({ routeName: selectedRoute.name, origin, destination, distance: selectedRoute.distance ?? `${route.distanceKm} km`, duration: selectedRoute.time ?? `${route.estimatedTimeMinutes} min`, safetyScore: selectedRoute.score ?? route.safetyScore, risk: selectedRoute.risk ?? 'Route safety guidance' })
     }
     setSavedMessage(download ? 'Route saved and details downloaded.' : 'Route saved to your paths.')
   }
 
   const googleMapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=walking`
   const downloadRoute = () => {
-    const route = { routeName: selectedRoute.name, origin, destination, distance: selectedRoute.distance, duration: selectedRoute.time, safetyScore: selectedRoute.score, risk: selectedRoute.risk }
-    const blob = new Blob([JSON.stringify(route, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${selectedRoute.name.toLowerCase().replaceAll(' ', '-')}-details.json`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
-    setSavedMessage('Route details downloaded.')
+    downloadRouteSummary({ routeName: selectedRoute.name, origin, destination, distance: selectedRoute.distance, duration: selectedRoute.time, safetyScore: selectedRoute.score, risk: selectedRoute.risk })
+    setSavedMessage('Readable route summary downloaded. Open it in a browser to print or save as a PDF.')
   }
 
   return <main className="safety-map-page min-h-screen bg-[#f4f1e9] text-cream motion-page"><section className="relative h-screen w-screen overflow-hidden">
@@ -123,7 +109,7 @@ function SafetyMap() {
     <div className="absolute bottom-4 left-4 z-[500] rounded-xl border border-cream/15 bg-[#4c1728]/95 p-2.5 text-[10px] text-cream shadow-sm"><strong className="mb-1 block text-gold">Locality ratings</strong><p className="text-[#a8d2b4]">● 82–100: lower reported risk</p><p className="text-gold">● 74–81: moderate reported risk</p><p className="text-[#ed879d]">● Below 74: higher reported risk</p></div>
     <div className="absolute bottom-4 right-4 z-[500] rounded-full border border-cream/15 bg-[#4c1728]/95 px-3 py-1.5 text-[10px] text-cream shadow-sm"><span className="text-gold">●</span> {DATASET_SUMMARY.totalReports} crime reports</div>
 
-    {routeOptions.length > 0 && <aside className="absolute bottom-4 right-4 z-[500] w-[min(22rem,calc(100%-2rem))] rounded-2xl border border-[#6a273b]/15 bg-white/95 p-4 text-[#3f1625] shadow-xl backdrop-blur motion-map-overlay"><div className="flex items-center justify-between"><div><p className="text-[10px] uppercase tracking-[.16em] text-[#a66e18]">Selected route</p><h1 className="font-display text-2xl">{selectedRoute.name}</h1></div><span style={{ borderColor: selectedRoute.color, color: selectedRoute.color }} className="rounded-full border px-2 py-1 text-xs">{selectedRoute.risk}</span></div><p className="mt-1 text-xs text-[#5b2439]/70">{origin} → {destination}</p><div className="mt-3 space-y-1.5">{routeOptions.map((route) => <button key={route.id} onClick={() => setSelectedRoute(route)} style={selectedRoute.id === route.id ? { borderColor: route.color, backgroundColor: `${route.color}14` } : undefined} className={`flex w-full items-center justify-between rounded-xl border p-2 text-left text-xs transition ${selectedRoute.id === route.id ? '' : 'border-[#6a273b]/10 hover:bg-[#faf6ef]'}`}><span><strong style={{ color: route.color }}>{route.name}</strong><small className="ml-1.5 text-[#5b2439]/60">{route.label}</small></span><span>{route.time} · {route.distance}</span></button>)}</div><div className="mt-3 grid grid-cols-3 gap-2"><button onClick={() => saveRoute()} className="flex items-center justify-center gap-1.5 rounded-full border border-[#c88c2e]/60 px-3 py-2 text-xs font-semibold text-[#895710]"><Save size={14} />Save</button><a href={googleMapsDirectionsUrl} target="_blank" rel="noreferrer" title="Open walking directions in Google Maps" aria-label="Open selected route in Google Maps" className="flex items-center justify-center rounded-full border border-[#273b88]/35 px-3 py-2 text-[#273b88]"><ExternalLink size={15} /></a><button onClick={downloadRoute} className="flex items-center justify-center gap-1.5 rounded-full bg-[#c88c2e] px-3 py-2 text-xs font-semibold text-white"><Download size={14} />Download</button></div>{savedMessage && <p className="mt-2 text-center text-xs text-[#447a59]">{savedMessage}</p>}</aside>}
+    {routeOptions.length > 0 && <aside className="absolute bottom-4 right-4 z-[500] w-[min(22rem,calc(100%-2rem))] rounded-2xl border border-[#6a273b]/15 bg-white/95 p-4 text-[#3f1625] shadow-xl backdrop-blur motion-map-overlay"><div className="flex items-center justify-between"><div><p className="text-[10px] uppercase tracking-[.16em] text-[#a66e18]">Selected route</p><h1 className="font-display text-2xl">{selectedRoute.name}</h1></div><span style={{ borderColor: selectedRoute.color, color: selectedRoute.color }} className="rounded-full border px-2 py-1 text-xs">{selectedRoute.risk}</span></div><p className="mt-1 text-xs text-[#5b2439]/70">{origin} → {destination}</p><div className="mt-3 space-y-1.5">{routeOptions.map((route) => <button key={route.id} onClick={() => setSelectedRoute(route)} style={selectedRoute.id === route.id ? { borderColor: route.color, backgroundColor: `${route.color}14` } : undefined} className={`flex w-full items-center justify-between rounded-xl border p-2 text-left text-xs transition ${selectedRoute.id === route.id ? '' : 'border-[#6a273b]/10 hover:bg-[#faf6ef]'}`}><span><strong style={{ color: route.color }}>{route.name}</strong><small className="ml-1.5 text-[#5b2439]/60">{route.label}</small></span><span>{route.time} · {route.distance}</span></button>)}</div><div className="mt-3 grid grid-cols-3 gap-2"><button onClick={() => saveRoute()} className="flex items-center justify-center gap-1.5 rounded-full border border-[#c88c2e]/60 px-3 py-2 text-xs font-semibold text-[#895710]"><Save size={14} />Save</button><a href={googleMapsDirectionsUrl} target="_blank" rel="noreferrer" title="Open walking directions in Google Maps" aria-label="Open selected route in Google Maps" className="flex items-center justify-center rounded-full border border-[#273b88]/35 px-3 py-2 text-[#273b88]"><ExternalLink size={15} /></a><button onClick={downloadRoute} title="Download readable route summary" className="flex items-center justify-center gap-1.5 rounded-full bg-[#c88c2e] px-3 py-2 text-xs font-semibold text-white"><Download size={14} />Summary</button></div>{savedMessage && <p className="mt-2 text-center text-xs text-[#447a59]">{savedMessage}</p>}</aside>}
     {savedMessage && routeOptions.length === 0 && <p className="absolute bottom-4 right-4 z-[500] rounded-xl bg-white px-4 py-3 text-xs text-[#7f2036] shadow-lg">{savedMessage}</p>}
     <div className="absolute right-4 top-20 z-[500] flex flex-col gap-2"><button onClick={() => setReportOpen(true)} className="flex items-center gap-2 rounded-full border border-cream/20 bg-[#4c1728]/95 px-3 py-2 text-xs font-semibold text-cream shadow-lg"><Flag size={14} />Report a problem</button>{routeOptions.length > 0 && <button onClick={() => setFeedbackOpen(true)} className="flex items-center gap-2 rounded-full border border-gold/40 bg-[#4c1728]/95 px-3 py-2 text-xs font-semibold text-gold shadow-lg"><MessageSquare size={14} />End journey</button>}</div>
     {reportOpen && <MapDialog title="Report a problem" value={reportMessage} onChange={setReportMessage} placeholder="Tell us about an unsafe spot, broken light, or route issue…" onClose={() => setReportOpen(false)} onSubmit={() => { setReportOpen(false); setReportMessage(''); setSavedMessage('Thank you—your report has been recorded for review.') }} />}
